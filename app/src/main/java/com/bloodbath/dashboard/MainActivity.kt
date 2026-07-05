@@ -695,3 +695,35 @@ fun SettingsModalDialog(
         }
     )
 }
+
+fun fetchData(
+    activity: MainActivity,
+    onAccountLoaded: (Map<String, Any>?) -> Unit,
+    onTransactionsLoaded: (List<Map<String, Any>>?) -> Unit,
+    onLoading: (Boolean) -> Unit,
+    onError: (String) -> Unit
+) {
+    onLoading(true)
+    onError("")
+    thread {
+        try {
+            val account = AlpacaService.fetchAccount(activity)
+            val transactions = AlpacaService.fetchTransactions(activity)
+
+            activity.runOnUiThread {
+                if (account != null) {
+                    onAccountLoaded(account)
+                    onTransactionsLoaded(transactions ?: emptyList())
+                } else {
+                    onError("Failed to fetch account info. Check your API keys.")
+                }
+                onLoading(false)
+            }
+        } catch (e: Exception) {
+            activity.runOnUiThread {
+                onError("Network error: ${e.message}")
+                onLoading(false)
+            }
+        }
+    }
+}
