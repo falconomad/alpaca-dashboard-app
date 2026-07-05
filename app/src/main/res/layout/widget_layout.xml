@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#FF121212">
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Alpaca Equity"
+        android:textColor="#FFAAAAAA"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/widget_equity"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="$0.00"
+        android:textColor="#FFFFFFFF"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginTop="4dp" />
+
+    <TextView
+        android:id="@+id/widget_buying_power"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Buying Power: $0.00"
+        android:textColor="#FF888888"
+        android:textSize="12sp"
+        android:layout_marginTop="4dp" />
+
+    <TextView
+        android:id="@+id/widget_update_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Updated: --:--"
+        android:textColor="#FF555555"
+        android:textSize="10sp"
+        android:layout_marginTop="8dp" />
+
+</LinearLayout>
