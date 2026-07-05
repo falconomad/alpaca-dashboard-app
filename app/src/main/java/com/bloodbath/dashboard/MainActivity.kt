@@ -4,7 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -21,8 +23,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -45,6 +47,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun MainAppContainer(activity: MainActivity) {
     var apiKey by remember { mutableStateOf("") }
@@ -73,31 +76,45 @@ fun MainAppContainer(activity: MainActivity) {
             .fillMaxSize()
             .background(Color(0xFF08080A)) // Deep Premium iOS Black
     ) {
-        if (!hasCredentials || (!isConnected && !loading && errorMsg.isNotEmpty())) {
-            PreLoginScreen(
-                apiKey = apiKey,
-                apiSecret = apiSecret,
-                errorMsg = errorMsg,
-                loading = loading,
-                onApiKeyChange = { apiKey = it },
-                onApiSecretChange = { apiSecret = it },
-                onConnect = {
-                    AlpacaService.saveCredentials(activity, apiKey, apiSecret)
-                    fetchData(activity, { accountInfo = it }, { transactions = it }, { loading = it }, { errorMsg = it })
-                }
-            )
-        } else {
-            PostLoginDashboard(
-                accountInfo = accountInfo,
-                transactions = transactions,
-                loading = loading,
-                onOpenSettings = { showSettings = true },
-                onRefresh = {
-                    fetchData(activity, { accountInfo = it }, { transactions = it }, { loading = it }, { errorMsg = it })
-                }
-            )
+        val isLoggedIn = hasCredentials && isConnected
+
+        // Smooth fluid animation transition between login and dashboard screens
+        AnimatedContent(
+            targetState = isLoggedIn,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(450)) togetherWith fadeOut(animationSpec = tween(450))
+            },
+            label = "screenTransition"
+        ) { loggedIn ->
+            if (!loggedIn) {
+                // Pre-Login Setup Welcome Screen
+                PreLoginScreen(
+                    apiKey = apiKey,
+                    apiSecret = apiSecret,
+                    errorMsg = errorMsg,
+                    loading = loading,
+                    onApiKeyChange = { apiKey = it },
+                    onApiSecretChange = { apiSecret = it },
+                    onConnect = {
+                        AlpacaService.saveCredentials(activity, apiKey, apiSecret)
+                        fetchData(activity, { accountInfo = it }, { transactions = it }, { loading = it }, { errorMsg = it })
+                    }
+                )
+            } else {
+                // Post-Login Dashboard Overview Screen
+                PostLoginDashboard(
+                    accountInfo = accountInfo,
+                    transactions = transactions,
+                    loading = loading,
+                    onOpenSettings = { showSettings = true },
+                    onRefresh = {
+                        fetchData(activity, { accountInfo = it }, { transactions = it }, { loading = it }, { errorMsg = it })
+                    }
+                )
+            }
         }
 
+        // Settings Sheet Modal
         if (showSettings) {
             SettingsModalDialog(
                 apiKey = apiKey,
@@ -141,18 +158,17 @@ fun PreLoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // App Custom Logo Image (R.drawable.ic_launcher)
         Box(
             modifier = Modifier
-                .size(72.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xFF30D158), Color(0xFF1C7D33))
-                    ),
-                    shape = RoundedCornerShape(18.dp)
-                ),
+                .size(80.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = "🦙", fontSize = 36.sp)
+            Image(
+                painter = painterResource(id = R.drawable.ic_launcher),
+                contentDescription = "Logo",
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -261,7 +277,6 @@ fun PostLoginDashboard(
     val formattedBuyingPower = String.format(Locale.US, "$%,.2f", buyingPower)
     val formattedCash = String.format(Locale.US, "$%,.2f", cash)
 
-    // Date filtering state
     var selectedDate by remember { mutableStateOf(Calendar.getInstance(TimeZone.getTimeZone("UTC"))) }
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -295,7 +310,7 @@ fun PostLoginDashboard(
             .fillMaxSize()
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        // Toolbar / Header
+        // Toolbar / Header with Custom Logo integration
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -303,19 +318,27 @@ fun PostLoginDashboard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "Total Equity Balance",
-                    color = Color(0xFF8E8E93),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_launcher),
+                    contentDescription = "Logo",
+                    modifier = Modifier.size(36.dp)
                 )
-                Text(
-                    text = formattedEquity,
-                    color = Color.White,
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "Total Equity Balance",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = formattedEquity,
+                        color = Color.White,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
             IconButton(
                 onClick = onOpenSettings,
@@ -696,34 +719,37 @@ fun SettingsModalDialog(
     )
 }
 
-fun fetchData(
-    activity: MainActivity,
-    onAccountLoaded: (Map<String, Any>?) -> Unit,
-    onTransactionsLoaded: (List<Map<String, Any>>?) -> Unit,
+// Optimized parallel thread query execution
+private fun fetchData(
+    context: android.content.Context,
+    onAccountFetch: (Map<String, Any>?) -> Unit,
+    onTransactionsFetch: (List<Map<String, Any>>?) -> Unit,
     onLoading: (Boolean) -> Unit,
     onError: (String) -> Unit
 ) {
     onLoading(true)
     onError("")
     thread {
+        var account: Map<String, Any>? = null
+        var txs: List<Map<String, Any>>? = null
+        
+        // Spin up parallel background requests to load account and transactions at the same time
+        val t1 = thread { account = AlpacaService.fetchAccount(context) }
+        val t2 = thread { txs = AlpacaService.fetchTransactions(context) }
+        
         try {
-            val account = AlpacaService.fetchAccount(activity)
-            val transactions = AlpacaService.fetchTransactions(activity)
-
-            activity.runOnUiThread {
-                if (account != null) {
-                    onAccountLoaded(account)
-                    onTransactionsLoaded(transactions ?: emptyList())
-                } else {
-                    onError("Failed to fetch account info. Check your API keys.")
-                }
-                onLoading(false)
-            }
-        } catch (e: Exception) {
-            activity.runOnUiThread {
-                onError("Network error: ${e.message}")
-                onLoading(false)
-            }
+            t1.join()
+            t2.join()
+        } catch (e: InterruptedException) {
+            // ignore
+        }
+        
+        onLoading(false)
+        if (account == null) {
+            onError("Connection failed. Check API credentials or internet connectivity.")
+        } else {
+            onAccountFetch(account)
+            onTransactionsFetch(txs)
         }
     }
 }
