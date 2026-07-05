@@ -1,2 +1,2 @@
-# alpaca-dashboard-app
-alpaca dashboard app
+# Umbrella App
+Native Android companion app for the Bloodbath trading bot.

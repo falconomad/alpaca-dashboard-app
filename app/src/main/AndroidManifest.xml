@@ -7,7 +7,7 @@
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="Alpaca Dashboard"
+        android:label="Umbrella"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AlpacaDashboard">
@@ -26,7 +26,7 @@
         <receiver
             android:name=".DashboardWidget"
             android:exported="false"
-            android:label="Alpaca Widget">
+            android:label="Umbrella Widget">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
