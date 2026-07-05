@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,7 +27,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.concurrent.thread
 
 class MainActivity : ComponentActivity() {
@@ -69,7 +74,6 @@ fun MainAppContainer(activity: MainActivity) {
             .background(Color(0xFF08080A)) // Deep Premium iOS Black
     ) {
         if (!hasCredentials || (!isConnected && !loading && errorMsg.isNotEmpty())) {
-            // Left Mockup style: Pre-Login Setup Screen
             PreLoginScreen(
                 apiKey = apiKey,
                 apiSecret = apiSecret,
@@ -83,7 +87,6 @@ fun MainAppContainer(activity: MainActivity) {
                 }
             )
         } else {
-            // Right Mockup style: Post-Login Dashboard
             PostLoginDashboard(
                 accountInfo = accountInfo,
                 transactions = transactions,
@@ -95,7 +98,6 @@ fun MainAppContainer(activity: MainActivity) {
             )
         }
 
-        // Settings Sheet Modal
         if (showSettings) {
             SettingsModalDialog(
                 apiKey = apiKey,
@@ -139,7 +141,6 @@ fun PreLoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // App Logo Icon
         Box(
             modifier = Modifier
                 .size(72.dp)
@@ -169,7 +170,6 @@ fun PreLoginScreen(
             modifier = Modifier.padding(top = 8.dp, bottom = 32.dp)
         )
 
-        // Glassmorphic Card Container
         Card(
             shape = RoundedCornerShape(16.dp),
             border = BorderStroke(1.dp, Color(0xFF2C2C2E)),
@@ -243,6 +243,7 @@ fun PreLoginScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PostLoginDashboard(
     accountInfo: Map<String, Any>?,
@@ -259,6 +260,35 @@ fun PostLoginDashboard(
     val formattedEquity = String.format(Locale.US, "$%,.2f", equity)
     val formattedBuyingPower = String.format(Locale.US, "$%,.2f", buyingPower)
     val formattedCash = String.format(Locale.US, "$%,.2f", cash)
+
+    // Date filtering state
+    var selectedDate by remember { mutableStateOf(Calendar.getInstance(TimeZone.getTimeZone("UTC"))) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    val selectedDateString = remember(selectedDate) {
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(selectedDate.time)
+    }
+
+    val displayDateText = remember(selectedDate) {
+        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }.format(Calendar.getInstance(TimeZone.getTimeZone("UTC")).time)
+
+        val formatter = SimpleDateFormat("MMMM d, yyyy", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val dateStr = formatter.format(selectedDate.time)
+        if (selectedDateString == todayStr) "Today ($dateStr)" else dateStr
+    }
+
+    val filteredTransactions = remember(transactions, selectedDateString) {
+        transactions?.filter { tx ->
+            val rawTime = tx["transaction_time"]?.toString() ?: ""
+            rawTime.startsWith(selectedDateString)
+        } ?: emptyList()
+    }
 
     Column(
         modifier = Modifier
@@ -335,6 +365,47 @@ fun PostLoginDashboard(
             }
         }
 
+        // Date Filter Card Bar
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF121215)),
+            border = BorderStroke(1.dp, Color(0xFF2C2C2E)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 20.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(text = "Filter By Date", color = Color(0xFF8E8E93), fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(text = displayDateText, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+                
+                Button(
+                    onClick = { showDatePicker = true },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1C1C1E)),
+                    border = BorderStroke(1.dp, Color(0xFF2C2C2E)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DateRange,
+                        contentDescription = "Select Date",
+                        tint = Color(0xFF30D158),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = "Select Date", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
         // List Header
         Row(
             modifier = Modifier
@@ -344,44 +415,102 @@ fun PostLoginDashboard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Recent Transactions History",
+                text = "Transactions (${filteredTransactions.size})",
                 color = Color.White,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold
             )
-            if (loading) {
-                CircularProgressIndicator(color = Color(0xFF30D158), modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-            } else {
-                Text(
-                    text = "Refresh",
-                    color = Color(0xFF30D158),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { onRefresh() }
-                )
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                    timeZone = TimeZone.getTimeZone("UTC")
+                }.format(Calendar.getInstance(TimeZone.getTimeZone("UTC")).time)
+                
+                if (selectedDateString != todayStr) {
+                    Text(
+                        text = "Show Today",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clickable {
+                                selectedDate = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+                            }
+                            .padding(end = 16.dp)
+                    )
+                }
+                
+                if (loading) {
+                    CircularProgressIndicator(color = Color(0xFF30D158), modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(
+                        text = "Refresh",
+                        color = Color(0xFF30D158),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { onRefresh() }
+                    )
+                }
             }
         }
 
         // List content
-        val txs = transactions ?: emptyList()
-        if (txs.isEmpty()) {
+        if (filteredTransactions.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "No recent transactions.", color = Color(0xFF8E8E93), fontSize = 14.sp)
+                Text(
+                    text = if (selectedDateString == SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Calendar.getInstance(TimeZone.getTimeZone("UTC")).time))
+                        "No transactions today." 
+                    else 
+                        "No transactions on this date.", 
+                    color = Color(0xFF8E8E93), 
+                    fontSize = 14.sp
+                )
             }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(txs) { tx ->
+                items(filteredTransactions) { tx ->
                     TransactionItem(tx)
                 }
             }
+        }
+    }
+
+    // Material 3 Date Picker Dialog
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedDate.timeInMillis
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+                            cal.timeInMillis = millis
+                            selectedDate = cal
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("Select", color = Color(0xFF30D158), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel", color = Color(0xFF8E8E93))
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 }
@@ -393,7 +522,7 @@ fun TransactionItem(tx: Map<String, Any>) {
     val qty = tx["qty"]?.toString()?.toDoubleOrNull() ?: 0.0
     val price = tx["price"]?.toString()?.toDoubleOrNull() ?: 0.0
     val rawDate = tx["transaction_time"]?.toString() ?: ""
-    val cleanDate = if (rawDate.length > 16) rawDate.substring(5, 16).replace("T", " ") else rawDate
+    val cleanDate = if (rawDate.length > 16) rawDate.substring(11, 16) else rawDate // Show HH:mm for selected day
     val status = tx["status"]?.toString()?.uppercase() ?: "FILLED"
 
     val isBuy = side == "buy"
@@ -411,7 +540,6 @@ fun TransactionItem(tx: Map<String, Any>) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Directional Icon + Symbol details
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -442,7 +570,6 @@ fun TransactionItem(tx: Map<String, Any>) {
                 }
             }
 
-            // Timestamp + Status Pill
             Column(horizontalAlignment = Alignment.End) {
                 Text(text = cleanDate, color = Color(0xFF8E8E93), fontSize = 11.sp)
                 Spacer(modifier = Modifier.height(6.dp))
