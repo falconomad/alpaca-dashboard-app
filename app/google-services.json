@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "123456789012",
+    "project_number": "426926572837",
     "project_id": "alpaca-dashboard-fcm",
-    "storage_bucket": "alpaca-dashboard-fcm.appspot.com"
+    "storage_bucket": "alpaca-dashboard-fcm.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:123456789012:android:567890abcdef",
+        "mobilesdk_app_id": "1:426926572837:android:15e506bde0d4a4f91286cc",
         "android_client_info": {
           "package_name": "com.bloodbath.dashboard"
         }
@@ -15,12 +15,12 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDummyKeyForCompilationSafety"
+          "current_key": "AIzaSyDVz0VNXNxg-89AuvORDM9yJhKlS63Jgd4"
         }
       ],
       "services": {
         "appinvite_service": {
-          "status": 1
+          "other_platform_oauth_client": []
         }
       }
     }
