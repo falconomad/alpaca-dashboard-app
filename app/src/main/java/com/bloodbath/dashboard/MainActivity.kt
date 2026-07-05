@@ -1,8 +1,13 @@
 package com.bloodbath.dashboard
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -24,11 +29,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.google.firebase.messaging.FirebaseMessaging
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -57,11 +67,60 @@ fun MainAppContainer(activity: MainActivity) {
     var loading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
+    var fcmToken by remember { mutableStateOf("") }
 
+    val context = LocalContext.current
     val hasCredentials = apiKey.isNotEmpty() && apiSecret.isNotEmpty()
     val isConnected = accountInfo != null && errorMsg.isEmpty()
 
-    // Initial Credential Load
+    // 1. Android 13+ Notification Permission Launcher
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            hasNotificationPermission = isGranted
+        }
+    )
+
+    // Trigger notification permission dialog
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // 2. Fetch Firebase Messaging Token
+    LaunchedEffect(Unit) {
+        try {
+            FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    fcmToken = task.result ?: ""
+                    context.getSharedPreferences("alpaca_prefs", android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .putString("fcm_token", fcmToken)
+                        .apply()
+                }
+            }
+        } catch (e: Exception) {
+            // Graceful fallback for offline build initialization
+            fcmToken = context.getSharedPreferences("alpaca_prefs", android.content.Context.MODE_PRIVATE)
+                .getString("fcm_token", "") ?: ""
+        }
+    }
+
+    // 3. Initial Credential Load
     LaunchedEffect(Unit) {
         val (k, s) = AlpacaService.getCredentials(activity)
         apiKey = k
@@ -74,11 +133,10 @@ fun MainAppContainer(activity: MainActivity) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF08080A)) // Deep Premium iOS Black
+            .background(Color(0xFF08080A))
     ) {
         val isLoggedIn = hasCredentials && isConnected
 
-        // Smooth fluid animation transition between login and dashboard screens
         AnimatedContent(
             targetState = isLoggedIn,
             transitionSpec = {
@@ -87,7 +145,6 @@ fun MainAppContainer(activity: MainActivity) {
             label = "screenTransition"
         ) { loggedIn ->
             if (!loggedIn) {
-                // Pre-Login Setup Welcome Screen
                 PreLoginScreen(
                     apiKey = apiKey,
                     apiSecret = apiSecret,
@@ -101,7 +158,6 @@ fun MainAppContainer(activity: MainActivity) {
                     }
                 )
             } else {
-                // Post-Login Dashboard Overview Screen
                 PostLoginDashboard(
                     accountInfo = accountInfo,
                     transactions = transactions,
@@ -114,11 +170,11 @@ fun MainAppContainer(activity: MainActivity) {
             }
         }
 
-        // Settings Sheet Modal
         if (showSettings) {
             SettingsModalDialog(
                 apiKey = apiKey,
                 apiSecret = apiSecret,
+                fcmToken = fcmToken,
                 onApiKeyChange = { apiKey = it },
                 onApiSecretChange = { apiSecret = it },
                 onClose = { showSettings = false },
@@ -158,10 +214,8 @@ fun PreLoginScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // App Custom Logo Image (R.drawable.ic_launcher)
         Box(
-            modifier = Modifier
-                .size(80.dp),
+            modifier = Modifier.size(80.dp),
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -310,7 +364,6 @@ fun PostLoginDashboard(
             .fillMaxSize()
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        // Toolbar / Header with Custom Logo integration
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -354,7 +407,6 @@ fun PostLoginDashboard(
             }
         }
 
-        // Sub Stats Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -388,7 +440,6 @@ fun PostLoginDashboard(
             }
         }
 
-        // Date Filter Card Bar
         Card(
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF121215)),
@@ -429,7 +480,6 @@ fun PostLoginDashboard(
             }
         }
 
-        // List Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -477,7 +527,6 @@ fun PostLoginDashboard(
             }
         }
 
-        // List content
         if (filteredTransactions.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -506,7 +555,6 @@ fun PostLoginDashboard(
         }
     }
 
-    // Material 3 Date Picker Dialog
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = selectedDate.timeInMillis
@@ -545,7 +593,7 @@ fun TransactionItem(tx: Map<String, Any>) {
     val qty = tx["qty"]?.toString()?.toDoubleOrNull() ?: 0.0
     val price = tx["price"]?.toString()?.toDoubleOrNull() ?: 0.0
     val rawDate = tx["transaction_time"]?.toString() ?: ""
-    val cleanDate = if (rawDate.length > 16) rawDate.substring(11, 16) else rawDate // Show HH:mm for selected day
+    val cleanDate = if (rawDate.length > 16) rawDate.substring(11, 16) else rawDate
     val status = tx["status"]?.toString()?.uppercase() ?: "FILLED"
 
     val isBuy = side == "buy"
@@ -622,12 +670,16 @@ fun TransactionItem(tx: Map<String, Any>) {
 fun SettingsModalDialog(
     apiKey: String,
     apiSecret: String,
+    fcmToken: String,
     onApiKeyChange: (String) -> Unit,
     onApiSecretChange: (String) -> Unit,
     onClose: () -> Unit,
     onDisconnect: () -> Unit,
     onSave: () -> Unit
 ) {
+    val clipboardManager = LocalClipboardManager.current
+    val annotatedToken = AnnotatedString(fcmToken)
+
     AlertDialog(
         onDismissRequest = onClose,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
@@ -680,7 +732,36 @@ fun SettingsModalDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Device Push Token",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = if (fcmToken.isEmpty()) "Generating token..." else fcmToken,
+                        onValueChange = {},
+                        readOnly = true,
+                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                            focusedTextColor = Color.LightGray,
+                            unfocusedTextColor = Color.LightGray,
+                            focusedBorderColor = Color.Gray,
+                            unfocusedBorderColor = Color(0xFF2C2C2E)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(
+                        onClick = { clipboardManager.setText(annotatedToken) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(text = "Copy Device Token", color = Color(0xFF30D158), fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -719,7 +800,6 @@ fun SettingsModalDialog(
     )
 }
 
-// Optimized parallel thread query execution
 private fun fetchData(
     context: android.content.Context,
     onAccountFetch: (Map<String, Any>?) -> Unit,
@@ -733,7 +813,6 @@ private fun fetchData(
         var account: Map<String, Any>? = null
         var txs: List<Map<String, Any>>? = null
         
-        // Spin up parallel background requests to load account and transactions at the same time
         val t1 = thread { account = AlpacaService.fetchAccount(context) }
         val t2 = thread { txs = AlpacaService.fetchTransactions(context) }
         
